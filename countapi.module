@@ -23,7 +23,7 @@ function countapi_save(&$count, $reset = FALSE) {
   $count->is_new = empty($count->cid);
 
   // Remove the count value when saving to prevent overriding the current count.
-  if ( isset($count->value) || !$reset ) {
+  if ( isset($count->value) && !$reset ) {
     unset($count->value);
   }
 
@@ -31,7 +31,7 @@ function countapi_save(&$count, $reset = FALSE) {
     drupal_write_record('countapi', $count);
   }
   else {
-    drupal_write_record('countapi', $count, $count->cid);
+    drupal_write_record('countapi', $count, 'cid');
   }
 }
 
@@ -86,5 +86,15 @@ function countapi_reset($param) {
 
     // Delete count data associated with counter.
     db_query("DELETE FROM {countapi_data} WHERE cid = %d", $count->cid);
+  }
+}
+
+/**
+ * Recalculate a count.
+ */
+function countapi_recalculate($param) {
+  if ( $count = countapi_load($param) ) {
+    $count->value = db_result(db_query("SELECT SUM(value) FROM {countapi_data} WHERE cid = %d", $count->cid));
+    countapi_save($count, TRUE);
   }
 }

@@ -1,0 +1,6 @@
+name              = Count API
+description       = Provides a simple counting api.
+core              = 6.x
+package           = Custom
+
+version           = 6.x-1.x

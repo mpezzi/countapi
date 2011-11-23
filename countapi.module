@@ -1,0 +1,90 @@
+<?php
+
+/**
+ * @file
+ * Provides a simple counting api.
+ */
+
+
+/**
+ * Load a count.
+ */
+function countapi_load($param) {
+  $sql = "SELECT * FROM {countapi} WHERE ";
+  $sql .= is_numeric($param) ? "cid = %d" : "name = '%s'";
+
+  return db_fetch_object(db_query($sql, $param));
+}
+
+/**
+ * Save a count.
+ */
+function countapi_save(&$count, $reset = FALSE) {
+  $count->is_new = empty($count->cid);
+
+  // Remove the count value when saving to prevent overriding the current count.
+  if ( isset($count->value) || !$reset ) {
+    unset($count->value);
+  }
+
+  if ( $count->is_new ) {
+    drupal_write_record('countapi', $count);
+  }
+  else {
+    drupal_write_record('countapi', $count, $count->cid);
+  }
+}
+
+/**
+ * Set a count.
+ */
+function countapi_set($param, $type, $type_id, $value = 1, $unique = TRUE) {
+  $allow_count = TRUE;
+
+  if ( $count = countapi_load($param) ) {
+
+    // Determine whether this count has been added yet.
+    $unique_check_sql = "SELECT COUNT(*) FROM {countapi_data} WHERE cid = %d AND type = '%s' AND type_id = %d LIMIT 1";
+    if ( $unique && db_result(db_query($unique_check_sql, $count->cid, $type, $type_id)) ) {
+      $allow_count = FALSE;
+    }
+
+    if ( $allow_count ) {
+      db_query("INSERT INTO {countapi_data} (cid, type, type_id, value) VALUES (%d, '%s', %d, %d)", $count->cid, $type, $type_id, $value);
+      db_query("UPDATE {countapi} SET value = value + %d WHERE cid = %d", $value, $count->cid);
+    }
+
+    return TRUE;
+  }
+
+  return FALSE;
+}
+
+/**
+ * Get a count.
+ */
+function countapi_get($param, $reset = FALSE) {
+  static $counts;
+
+  if ( !isset($counts[$param]) || $reset ) {
+    if ( $count = countapi_load($param) ) {
+      $counts[$param] = $count->value;
+    }
+  }
+
+  return isset($counts[$param]) ? $counts[$param] : 0;
+}
+
+/**
+ * Reset a count.
+ */
+function countapi_reset($param) {
+  if ( $count = countapi_load($param) ) {
+    // Reset the counter value.
+    $count->value = 0;
+    countapi_save($count, TRUE);
+
+    // Delete count data associated with counter.
+    db_query("DELETE FROM {countapi_data} WHERE cid = %d", $count->cid);
+  }
+}

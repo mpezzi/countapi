@@ -1,0 +1,79 @@
+<?php
+
+/**
+ * Implements hook_schema().
+ */
+function countapi_schema() {
+  $schema['countapi'] = array(
+    'description' => t('Stores count information'),
+    'fields' => array(
+      'cid' => array(
+        'type' => 'serial',
+        'not null' => TRUE),
+      'name' => array(
+        'type' => 'varchar',
+        'length' => '32',
+        'not null' => TRUE,
+        'default' => ''),
+      'value' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0),
+    ),
+    'primary key' => array('cid'),
+  );
+
+  $schema['countapi_data'] = array(
+    'description' => t('Stores count data information'),
+    'fields' => array(
+      'cid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0),
+      'type' => array(
+        'type' => 'varchar',
+        'length' => '32',
+        'not null' => TRUE,
+        'default' => ''),
+      'type_id' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0),
+      'value' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0),
+    ),
+    'indexes' => array(
+      'cid_type_id' => array('cid', 'type', 'type_id'),
+    ),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_install().
+ */
+function countapi_install() {
+  drupal_install_schema('countapi');
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function countapi_uninstall() {
+  drupal_uninstall_schema('countapi');
+
+  // Remove pinapi variables.
+  $result = db_query("SELECT name FROM {variable} WHERE name LIKE 'countapi_%'");
+  while ( $row = db_fetch_object($result) ) {
+    variable_del($row->name);
+  }
+
+  drupal_set_message(t('CountAPI has been uninstalled.'));
+}

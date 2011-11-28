@@ -44,7 +44,7 @@ function countapi_set($param, $type, $type_id, $value = 1, $unique = TRUE) {
   if ( $count = countapi_load($param) ) {
 
     // Determine whether this count has been added yet.
-    $unique_check_sql = "SELECT COUNT(*) FROM {countapi_data} WHERE cid = %d AND type = '%s' AND type_id = %d LIMIT 1";
+    $unique_check_sql = "SELECT COUNT(1) FROM {countapi_data} WHERE cid = %d AND type = '%s' AND type_id = %d LIMIT 1";
     if ( $unique && db_result(db_query($unique_check_sql, $count->cid, $type, $type_id)) ) {
       $allow_count = FALSE;
     }

@@ -76,6 +76,24 @@ function countapi_get($param, $reset = FALSE) {
 }
 
 /**
+ * Check if count exists.
+ */
+function countapi_exists($param, $type, $type_id, $reset = FALSE) {
+  static $exists;
+
+  if ( !isset($exists[$param][$type][$type_id]) || $reset ) {
+    if ( $count = countapi_load($param) ) {
+      $exists[$param][$type][$type_id] = (bool) db_result(db_query("SELECT COUNT(1) FROM {countapi_data} WHERE cid = %d AND type = '%s' AND type_id = %d LIMIT 1", $count->cid, $type, $type_id));
+    }
+    else {
+      $exists[$param][$type][$type_id] = FALSE;
+    }
+  }
+
+  return $exists[$param][$type][$type_id];
+}
+
+/**
  * Reset a count.
  */
 function countapi_reset($param) {

@@ -1,6 +1,12 @@
 <?php
 
 /**
+ * @file
+ * Provides database schema for countapi.module
+ */
+
+
+/**
  * Implements hook_schema().
  */
 function countapi_schema() {
@@ -69,11 +75,11 @@ function countapi_install() {
 function countapi_uninstall() {
   drupal_uninstall_schema('countapi');
 
-  // Remove pinapi variables.
+  // Remove countapi variables.
   $result = db_query("SELECT name FROM {variable} WHERE name LIKE 'countapi_%'");
   while ( $row = db_fetch_object($result) ) {
     variable_del($row->name);
   }
 
-  drupal_set_message(t('CountAPI has been uninstalled.'));
+  drupal_set_message(t('Count API has been uninstalled.'));
 }

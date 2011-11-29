@@ -9,11 +9,16 @@
 /**
  * Load a count.
  */
-function countapi_load($param) {
-  $sql = "SELECT * FROM {countapi} WHERE ";
-  $sql .= is_numeric($param) ? "cid = %d" : "name = '%s'";
+function countapi_load($param, $reset = FALSE) {
+  static $counts;
 
-  return db_fetch_object(db_query($sql, $param));
+  if ( !isset($counts[$param]) || $reset ) {
+    $sql = "SELECT * FROM {countapi} WHERE ";
+    $sql .= is_numeric($param) ? "cid = %d" : "name = '%s'";
+    $counts[$param] = db_fetch_object(db_query($sql, $param));
+  }
+
+  return $counts[$param];
 }
 
 /**
@@ -52,6 +57,9 @@ function countapi_set($param, $type, $type_id, $value = 1, $unique = TRUE) {
     if ( $allow_count ) {
       db_query("INSERT INTO {countapi_data} (cid, type, type_id, value) VALUES (%d, '%s', %d, %d)", $count->cid, $type, $type_id, $value);
       db_query("UPDATE {countapi} SET value = value + %d WHERE cid = %d", $value, $count->cid);
+
+      // Reset the current statically cached count.
+      countapi_load($param, TRUE);
     }
 
     return TRUE;

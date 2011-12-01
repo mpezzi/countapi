@@ -72,15 +72,11 @@ function countapi_set($param, $type, $type_id, $value = 1, $unique = TRUE) {
  * Get a count.
  */
 function countapi_get($param, $reset = FALSE) {
-  static $counts;
-
-  if ( !isset($counts[$param]) || $reset ) {
-    if ( $count = countapi_load($param) ) {
-      $counts[$param] = $count->value;
-    }
+  if ( $count = countapi_load($param, $reset) ) {
+    return $count->value;
   }
 
-  return isset($counts[$param]) ? $counts[$param] : 0;
+  return FALSE;
 }
 
 /**

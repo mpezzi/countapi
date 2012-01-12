@@ -53,6 +53,10 @@ function countapi_schema() {
         'unsigned' => TRUE,
         'not null' => TRUE,
         'default' => 0),
+      'timestamp' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0),
     ),
     'indexes' => array(
       'cid_type_id' => array('cid', 'type', 'type_id'),

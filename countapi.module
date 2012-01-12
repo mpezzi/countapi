@@ -7,7 +7,35 @@
 
 
 /**
+ * Implements hook_perm().
+ */
+function countapi_perm() {
+  return array(
+    'delete counts',
+    'reset counts',
+    'recalculate counts',
+  );
+}
+
+/**
+ * Implements hook_views_api().
+ */
+function countapi_views_api() {
+  return array(
+    'api' => 2,
+    'path' => drupal_get_path('module', 'countapi') . '/views',
+  );
+}
+
+/**
  * Load a count.
+ *
+ * @param $param
+ *   A parameter to use when loading a count object, can be the CID or the NAME.
+ * @param $reset
+ *   Whether or not to reset the internal static cache.
+ * @return
+ *   A count object.
  */
 function countapi_load($param, $reset = FALSE) {
   static $counts;
@@ -23,6 +51,11 @@ function countapi_load($param, $reset = FALSE) {
 
 /**
  * Save a count.
+ *
+ * @param $count
+ *   A count object.
+ * @param $reset
+ *   Whether or not to override the count value. Defaults to FALSE.
  */
 function countapi_save(&$count, $reset = FALSE) {
   $count->is_new = empty($count->cid);
@@ -41,7 +74,99 @@ function countapi_save(&$count, $reset = FALSE) {
 }
 
 /**
- * Set a count.
+ * Delete a count.
+ */
+function countapi_delete($cid) {
+  $count = countapi_load($cid, TRUE);
+
+  if ( user_access('delete counts') && $count ) {
+    db_query('DELETE FROM {countapi} WHERE cid = %d', $count->cid);
+    db_query('DELETE FROM {countapi_data} WHERE cid = %d', $count->cid);
+
+    // Clear the page and block caches.
+    cache_clear_all();
+
+    // Invoke hook_countapi_delete().
+    module_invoke_all('countapi_delete', $count);
+
+    watchdog('countapi', '@name: deleted.', array('@name' => $count->name));
+    drupal_set_message(t('@name has been deleted.', array('@name' => $count->name)));
+  }
+}
+
+/**
+ * Reset a count.
+ *
+ * @param $param
+ *   A parameter to use when loading a count object, can be the CID or the NAME.
+ */
+function countapi_reset($param) {
+  $count = countapi_load($param);
+
+  if ( user_access('reset counts') && $count ) {
+    // Reset the counter value.
+    $count->value = 0;
+
+    // Update the count and reset the count to the new value.
+    countapi_save($count, TRUE);
+
+    // Delete count data associated with counter.
+    db_query("DELETE FROM {countapi_data} WHERE cid = %d", $count->cid);
+
+    // Clear the page and blocks caches.
+    cache_clear_all();
+
+    // Invoke hook_countapi_reset().
+    module_invoke_all('countapi_reset', $count);
+
+    watchdog('countapi', '@name: reset.', array('@name' => $count->name));
+    drupal_set_message(t('@name has been reset.', array('@name' => $count->name)));
+  }
+}
+
+/**
+ * Recalculate a count.
+ *
+ * @param $param
+ *   A parameter to use when loading a count object, can be the CID or the NAME.
+ */
+function countapi_recalculate($param) {
+  $count = countapi_load($param);
+
+  if ( user_access('recalculate counts') && $count ) {
+    // Recalculate the sum of all the count data items.
+    $count->value = db_result(db_query("SELECT SUM(value) FROM {countapi_data} WHERE cid = %d", $count->cid));
+
+    // Update the count and reset the count to the new value.
+    countapi_save($count, TRUE);
+
+    // Clear the page and blocks caches.
+    cache_clear_all();
+
+    // Invoke hook_countapi_recalculate().
+    module_invoke_all('countapi_recalculate', $count);
+
+    watchdog('countapi', '@name: recalculated.', array('@name' => $count->name));
+    drupal_set_message(t('@name has been recalculated.', array('@name' => $count->name)));
+  }
+}
+
+
+/**
+ * Set a count data item.
+ *
+ * @param $param
+ *   A parameter to use when loading a count object, can be the CID or the NAME.
+ * @param $type
+ *   A string representing the type of data. Example: user, node etc.
+ * @param $type_id
+ *   A integer representing the type id.
+ * @param $value
+ *   A number value to increase the count.
+ * @param $unique
+ *   Whether or not to check if a count already exists and if it does, do not count it.
+ * @return
+ *   TRUE or FALSE whether the count was set.
  */
 function countapi_set($param, $type, $type_id, $value = 1, $unique = TRUE) {
   $allow_count = TRUE;
@@ -55,11 +180,14 @@ function countapi_set($param, $type, $type_id, $value = 1, $unique = TRUE) {
     }
 
     if ( $allow_count ) {
-      db_query("INSERT INTO {countapi_data} (cid, type, type_id, value) VALUES (%d, '%s', %d, %d)", $count->cid, $type, $type_id, $value);
+      db_query("INSERT INTO {countapi_data} (cid, type, type_id, value, timestamp) VALUES (%d, '%s', %d, %d, %d)", $count->cid, $type, $type_id, $value, time());
       db_query("UPDATE {countapi} SET value = value + %d WHERE cid = %d", $value, $count->cid);
 
       // Reset the current statically cached count.
       countapi_load($param, TRUE);
+
+      // Invoke hook_countapi_set().
+      module_invoke_all('countapi_set', $param, $type, $type_id, $value, $unique);
     }
 
     return TRUE;
@@ -70,6 +198,13 @@ function countapi_set($param, $type, $type_id, $value = 1, $unique = TRUE) {
 
 /**
  * Get a count.
+ *
+ * @param $param
+ *   A parameter to use when loading a count object, can be the CID or the NAME.
+ * @param $reset
+ *   Whether or not to reset the internal static cache.
+ * @return
+ *   The count value or FALSE if the parameter does not exist.
  */
 function countapi_get($param, $reset = FALSE) {
   if ( $count = countapi_load($param, $reset) ) {
@@ -80,43 +215,46 @@ function countapi_get($param, $reset = FALSE) {
 }
 
 /**
- * Check if count exists.
+ * Return a the count of particular set entries.
+ *
+ * @param $param
+ *   A parameter to use when loading a count object, can be the CID or the NAME.
+ * @param $type
+ *   A string representing the type of data. Example: user, node etc.
+ * @param $type_id
+ *   A integer representing the type id.
+ * @param $reset
+ *   Whether or not to reset the internal static cache.
+ * @return
+ *   The number of count data items registered for the parameter, type and type_id.
  */
-function countapi_exists($param, $type, $type_id, $reset = FALSE) {
-  static $exists;
+function countapi_count($param, $type, $type_id, $reset = FALSE) {
+  static $counts;
 
-  if ( !isset($exists[$param][$type][$type_id]) || $reset ) {
+  if ( !isset($counts[$param][$type][$type_id]) || $reset ) {
     if ( $count = countapi_load($param) ) {
-      $exists[$param][$type][$type_id] = (bool) db_result(db_query("SELECT COUNT(1) FROM {countapi_data} WHERE cid = %d AND type = '%s' AND type_id = %d LIMIT 1", $count->cid, $type, $type_id));
+      $counts[$param][$type][$type_id] = db_result(db_query("SELECT COUNT(*) FROM {countapi_data} WHERE cid = %d AND type = '%s' AND type_id = %d", $count->cid, $type, $type_id));
     }
     else {
-      $exists[$param][$type][$type_id] = FALSE;
+      $counts[$param][$type][$type_id] = FALSE;
     }
   }
 
-  return $exists[$param][$type][$type_id];
+  return $counts[$param][$type][$type_id];
 }
 
 /**
- * Reset a count.
+ * Return whether a count entry exists.
+ *
+ * @param $param
+ *   A parameter to use when loading a count object, can be the CID or the NAME.
+ * @param $type
+ *   A string representing the type of data. Example: user, node etc.
+ * @param $type_id
+ *   A integer representing the type id.
+ * @param $reset
+ *   Whether or not to reset the internal static cache.
  */
-function countapi_reset($param) {
-  if ( $count = countapi_load($param) ) {
-    // Reset the counter value.
-    $count->value = 0;
-    countapi_save($count, TRUE);
-
-    // Delete count data associated with counter.
-    db_query("DELETE FROM {countapi_data} WHERE cid = %d", $count->cid);
-  }
-}
-
-/**
- * Recalculate a count.
- */
-function countapi_recalculate($param) {
-  if ( $count = countapi_load($param) ) {
-    $count->value = db_result(db_query("SELECT SUM(value) FROM {countapi_data} WHERE cid = %d", $count->cid));
-    countapi_save($count, TRUE);
-  }
+function countapi_exists($param, $type, $type_id, $reset = FALSE) {
+  return (bool) countapi_count($param, $type, $type_id, $reset = FALSE);
 }

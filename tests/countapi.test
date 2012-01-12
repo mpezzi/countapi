@@ -1,0 +1,70 @@
+<?php
+
+/**
+ * @file
+ * Test file for Count API module.
+ */
+
+class CountAPITestCase extends DrupalWebTestCase {
+
+  /**
+   * User with rights to delete, reset and recalculate.
+   */
+  public $privileged_user;
+
+  /**
+   * Count object.
+   */
+  public $count;
+
+  /**
+   * Implements getInfo().
+   */
+  public function getInfo() {
+    return array(
+      'name' => t('Count API tests'),
+      'description' => t('Run tests for Count API.'),
+      'group' => t('Count API'),
+    );
+  }
+
+  /**
+   * Implements setUp().
+   */
+  public function setUp() {
+    parent::setUp('countapi');
+
+    $this->privileged_user = $this->drupalCreateUser(array(
+      'delete counts',
+      'reset counts', 
+      'recalculate counts'
+    ));
+
+    $this->drupalLogin($this->privileged_user);
+
+    // Create count object for tests.
+    $this->count = (object) array('name' => 'test');
+    countapi_save($this->count);
+  }
+
+  /**
+   * Ensure count creation.
+   */
+  function testCountSave() {
+    try {
+      $this->assertEqual($this->count->value, 0, t('Count value should default to 0 when created.'));
+    }
+    catch ( Exception $e ) {
+      $this->fail(t('Could not save count.'));
+      return;
+    }
+  }
+
+  /**
+   * Implements tearDown().
+   */
+  public function tearDown() {
+    parent::tearDown();
+  }
+
+}

@@ -34,25 +34,31 @@ class CountAPITestCase extends DrupalWebTestCase {
   public function setUp() {
     parent::setUp('countapi');
 
-    $this->privileged_user = $this->drupalCreateUser(array(
+    $this->user = $this->drupalCreateUser(array(
       'delete counts',
       'reset counts', 
       'recalculate counts'
     ));
 
-    $this->drupalLogin($this->privileged_user);
+    $this->drupalLogin($this->user);
 
     // Create count object for tests.
-    $this->count = (object) array('name' => 'test');
-    countapi_save($this->count);
+    $this->count = (object) array(
+      'name' => 'test'
+    );
   }
 
   /**
-   * Ensure count creation.
+   * Ensure count saving.
    */
-  function testCountSave() {
+  function testCountCreation() {
     try {
-      $this->assertEqual($this->count->value, 0, t('Count value should default to 0 when created.'));
+      // Save to database.
+      countapi_save($this->count);
+
+      // Check that the count was saved to the database.
+      $count = db_fetch_object(db_query("SELECT * FROM {countapi} WHERE name = 'test'"));
+      $this->assertTrue($count, t('Count value should default to 0 when created.'));
     }
     catch ( Exception $e ) {
       $this->fail(t('Could not save count.'));
@@ -61,9 +67,58 @@ class CountAPITestCase extends DrupalWebTestCase {
   }
 
   /**
+   * Ensure count loading.
+   */
+  function testCountLoad() {
+    try {
+      // Save to database.
+      countapi_save($this->count);
+
+      // Check that the count was loaded from the database.
+      $count = countapi_load($this->count->cid);
+      $this->assertEqual($count->name, $this->count->name, t('Count object was loaded correctly'));
+    }
+    catch ( Exception $e ) {
+      $this->fail(t('Could not load count.'));
+      return;
+    }
+  }
+
+  /**
+   * Ensure count setting.
+   */
+  function testCountSet() {
+    try {
+      // Save to database.
+      countapi_save($this->count);
+
+      // Set count and check we have one result.
+      countapi_set('test', 'user', $this->user->uid, 1, FALSE);
+      $count = db_result(db_query("SELECT COUNT(*) FROM {countapi_data} WHERE cid = %d AND type = '%s' AND type_id = %d", $this->count->cid, 'user', $this->user->uid));
+      $this->assertEqual($count, 1, t('Count item was set in database.'));
+
+      // Set another count and check we have two results.
+      countapi_set('test', 'user', $this->user->uid, 1, FALSE);
+      $count = db_result(db_query("SELECT COUNT(*) FROM {countapi_data} WHERE cid = %d AND type = '%s' AND type_id = %d", $this->count->cid, 'user', $this->user->uid));
+      $this->assertEqual($count, 2, t('Count item number 2 was set in database.'));
+
+      // Set another count and check unique functionality.
+      countapi_set('test', 'user', $this->user->uid, 1, TRUE);
+      $count = db_result(db_query("SELECT COUNT(*) FROM {countapi_data} WHERE cid = %d AND type = '%s' AND type_id = %d", $this->count->cid, 'user', $this->user->uid));
+      $this->assertEqual($count, 2, t('Count item unique was not set in database.'));
+    }
+    catch ( Exception $e ) {
+      $this->fail(t('Could not set count.'));
+      return;
+    }
+  }
+
+  /**
    * Implements tearDown().
    */
   public function tearDown() {
+    db_query("DELETE FROM {countapi} WHERE name = 'test'");
+
     parent::tearDown();
   }
 

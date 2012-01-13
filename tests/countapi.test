@@ -46,6 +46,9 @@ class CountAPITestCase extends DrupalWebTestCase {
     $this->count = (object) array(
       'name' => 'test'
     );
+
+    // Save to database.
+    countapi_save($this->count);
   }
 
   /**
@@ -53,12 +56,9 @@ class CountAPITestCase extends DrupalWebTestCase {
    */
   function testCountCreation() {
     try {
-      // Save to database.
-      countapi_save($this->count);
-
       // Check that the count was saved to the database.
-      $count = db_fetch_object(db_query("SELECT * FROM {countapi} WHERE name = 'test'"));
-      $this->assertTrue($count, t('Count value should default to 0 when created.'));
+      $count = db_fetch_object(db_query("SELECT * FROM {countapi} WHERE name = '%s'", $this->count->name));
+      $this->assertTrue($count, t('Count was saved to database.'));
     }
     catch ( Exception $e ) {
       $this->fail(t('Could not save count.'));
@@ -71,12 +71,9 @@ class CountAPITestCase extends DrupalWebTestCase {
    */
   function testCountLoad() {
     try {
-      // Save to database.
-      countapi_save($this->count);
-
       // Check that the count was loaded from the database.
       $count = countapi_load($this->count->cid);
-      $this->assertEqual($count->name, $this->count->name, t('Count object was loaded correctly'));
+      $this->assertEqual($count->name, $this->count->name, t('Count was loaded from database.'));
     }
     catch ( Exception $e ) {
       $this->fail(t('Could not load count.'));
@@ -89,26 +86,62 @@ class CountAPITestCase extends DrupalWebTestCase {
    */
   function testCountSet() {
     try {
-      // Save to database.
-      countapi_save($this->count);
-
       // Set count and check we have one result.
-      countapi_set('test', 'user', $this->user->uid, 1, FALSE);
+      countapi_set($this->count->name, 'user', $this->user->uid, 1, FALSE);
       $count = db_result(db_query("SELECT COUNT(*) FROM {countapi_data} WHERE cid = %d AND type = '%s' AND type_id = %d", $this->count->cid, 'user', $this->user->uid));
       $this->assertEqual($count, 1, t('Count item was set in database.'));
 
       // Set another count and check we have two results.
-      countapi_set('test', 'user', $this->user->uid, 1, FALSE);
+      countapi_set($this->count->name, 'user', $this->user->uid, 1, FALSE);
       $count = db_result(db_query("SELECT COUNT(*) FROM {countapi_data} WHERE cid = %d AND type = '%s' AND type_id = %d", $this->count->cid, 'user', $this->user->uid));
       $this->assertEqual($count, 2, t('Count item number 2 was set in database.'));
 
-      // Set another count and check unique functionality.
-      countapi_set('test', 'user', $this->user->uid, 1, TRUE);
+      // Set another count and check unique functionality, we should still have two results.
+      countapi_set($this->count->name, 'user', $this->user->uid, 1, TRUE);
       $count = db_result(db_query("SELECT COUNT(*) FROM {countapi_data} WHERE cid = %d AND type = '%s' AND type_id = %d", $this->count->cid, 'user', $this->user->uid));
       $this->assertEqual($count, 2, t('Count item unique was not set in database.'));
     }
     catch ( Exception $e ) {
       $this->fail(t('Could not set count.'));
+      return;
+    }
+  }
+
+  /**
+   * Ensure count getting.
+   */
+  function testCountGet() {
+    try {
+      // Set count and check we have five results.
+      countapi_set($this->count->name, 'user', $this->user->uid, 1, FALSE);
+      countapi_set($this->count->name, 'user', $this->user->uid, 2, FALSE);
+      countapi_set($this->count->name, 'user', $this->user->uid + 1, 2, FALSE);
+
+      $count = countapi_get($this->count->name);
+      $this->assertEqual($count, 5, t('Count was correct from database.'));
+    }
+    catch ( Exception $e ) {
+      $this->fail(t('Could not get count.'));
+      return;
+    }
+  }
+
+  /**
+   * Ensure individual count getting.
+   */
+  function testCountCount() {
+    try {
+      // Set count and check we have five results.
+      countapi_set($this->count->name, 'user', $this->user->uid, 1, FALSE);
+      countapi_set($this->count->name, 'user', $this->user->uid, 2, FALSE);
+      countapi_set($this->count->name, 'user', $this->user->uid + 1, 2, FALSE);
+
+      // Get individual count.
+      $count = countapi_count($this->count->name, 'user', $this->user->uid);
+      $this->assertEqual($count, 2, t('Count item were returned from database.'));
+    }
+    catch ( Exception $e ) {
+      $this->fail(t('Could not get count.'));
       return;
     }
   }
